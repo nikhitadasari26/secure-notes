@@ -110,6 +110,50 @@ class EditorManager {
             window.storageManager.exportHtml(title, html);
         });
 
+        // AI Actions
+        const handleAIOperation = async (promptType) => {
+            if (!window.aiManager.isReady()) {
+                alert("Please click the Settings gear icon to configure your Gemini API Key first.");
+                return;
+            }
+
+            const textContext = this.quill.getText().trim();
+            if (!textContext) {
+                alert("Please write some text in the editor first before using AI.");
+                return;
+            }
+
+            const originalStatus = this.saveStatus.textContent;
+            this.saveStatus.textContent = '✨ AI is thinking...';
+
+            let prompt = "";
+            switch (promptType) {
+                case 'summarize': prompt = "Please provide a concise summary of the following text:"; break;
+                case 'grammar': prompt = "Please correct any grammatical errors or typos in the following text. Do not add conversational filler, just return the corrected text:"; break;
+                case 'expand': prompt = "Please expand on the concepts in the following text, providing more detail and professional formatting:"; break;
+            }
+
+            try {
+                const generatedText = await window.aiManager.generateContent(prompt, textContext);
+
+                // Append the AI response to the bottom of the editor securely via Delta
+                const finalContent = "\n\n--- AI Generation ---\n" + generatedText.trim() + "\n";
+                const length = this.quill.getLength();
+                this.quill.insertText(length, finalContent);
+                this.saveStatus.textContent = originalStatus;
+                this.saveCurrentNote();
+
+            } catch (error) {
+                console.error("AI Error:", error);
+                alert("AI Generation Failed: " + error.message);
+                this.saveStatus.textContent = originalStatus;
+            }
+        };
+
+        document.getElementById('ai-summarize').addEventListener('click', (e) => { e.preventDefault(); handleAIOperation('summarize'); });
+        document.getElementById('ai-grammar').addEventListener('click', (e) => { e.preventDefault(); handleAIOperation('grammar'); });
+        document.getElementById('ai-expand').addEventListener('click', (e) => { e.preventDefault(); handleAIOperation('expand'); });
+
         document.getElementById('print-btn').addEventListener('click', () => window.print());
 
         // Keyboard Shortcuts

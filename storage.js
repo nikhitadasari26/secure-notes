@@ -12,9 +12,11 @@ class StorageManager {
         this.initPromise = this.initDB();
 
         // Initialize Supabase Connection
-        this.supabaseUrl = 'https://kaymnziqklvyoeiuzobs.supabase.co';
-        this.supabaseKey = 'sb_publishable_riWK2OIAVj6VqsaUDn475A_hAMRw3ce';
-        this.supabase = window.supabase ? window.supabase.createClient(this.supabaseUrl, this.supabaseKey) : null;
+        this.supabaseUrl = localStorage.getItem('supabase_url') || '';
+        this.supabaseKey = localStorage.getItem('supabase_anon_key') || '';
+        this.supabase = (window.supabase && this.supabaseUrl && this.supabaseKey)
+            ? window.supabase.createClient(this.supabaseUrl, this.supabaseKey)
+            : null;
     }
 
     generateUUID() {

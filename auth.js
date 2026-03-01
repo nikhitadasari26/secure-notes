@@ -9,7 +9,7 @@ class AuthManager {
         this.currentPin = '';
         this.mode = 'login'; // 'setup', 'confirm', 'login'
         this.setupPin = ''; // Temporarily hold pin during setup confirmation
-        
+
         // DOM Elements
         this.authView = document.getElementById('auth-view');
         this.dashboardView = document.getElementById('dashboard-view');
@@ -26,7 +26,7 @@ class AuthManager {
 
     async init() {
         const storedHash = localStorage.getItem('secure_notes_pin');
-        
+
         if (!storedHash) {
             this.mode = 'setup';
             this.authTitle.textContent = 'Setup PIN';
@@ -47,11 +47,11 @@ class AuthManager {
 
         this.backspaceBtn.addEventListener('click', () => this.handleBackspace());
         this.clearBtn.addEventListener('click', () => this.handleClear());
-        
+
         // Keyboard support
         document.addEventListener('keydown', (e) => {
             if (!this.authView.classList.contains('active')) return;
-            
+
             if (e.key >= '0' && e.key <= '9') {
                 this.handleNumber(e.key);
             } else if (e.key === 'Backspace') {
@@ -76,7 +76,7 @@ class AuthManager {
         this.errorMsg.textContent = msg;
         this.errorMsg.classList.remove('hidden');
         this.dots.forEach(dot => dot.classList.add('error'));
-        
+
         setTimeout(() => {
             this.handleClear();
             this.errorMsg.classList.add('hidden');
@@ -101,7 +101,7 @@ class AuthManager {
             this.mode = 'confirm';
             this.authSubtitle.textContent = 'Confirm your PIN';
             this.updateDots();
-        } 
+        }
         else if (this.mode === 'confirm') {
             if (this.currentPin === this.setupPin) {
                 // PIN matched, save it
@@ -115,11 +115,11 @@ class AuthManager {
                 this.setupPin = '';
                 this.authSubtitle.textContent = 'Create a 4-digit PIN to secure your notes';
             }
-        } 
+        }
         else if (this.mode === 'login') {
             const storedHash = localStorage.getItem('secure_notes_pin');
             const currentHash = await this.hashPin(this.currentPin);
-            
+
             if (currentHash === storedHash) {
                 this.unlock();
             } else {
@@ -132,7 +132,7 @@ class AuthManager {
         if (this.currentPin.length < this.pinLength) {
             this.currentPin += num;
             this.updateDots();
-            
+
             if (this.currentPin.length === this.pinLength) {
                 // Small delay for UI to show last dot filled
                 setTimeout(() => this.processPinComplete(), 100);
@@ -159,7 +159,7 @@ class AuthManager {
             this.authView.classList.add('hidden');
             this.dashboardView.classList.remove('hidden');
             this.dashboardView.classList.add('active');
-            
+
             // Dispatch event that auth is successful so other modules can load data
             document.dispatchEvent(new CustomEvent('authSuccess'));
         }, 300);
@@ -191,7 +191,64 @@ function updateThemeIcon(theme) {
     }
 }
 
-// Initialize Auth
+// --- Settings Manager ---
+class SettingsManager {
+    constructor() {
+        this.settingsBtn = document.getElementById('settings-btn');
+        this.closeBtn = document.getElementById('close-settings');
+        this.saveBtn = document.getElementById('save-settings-btn');
+        this.modal = document.getElementById('settings-modal');
+
+        this.geminiInput = document.getElementById('gemini-key');
+        this.supabaseUrlInput = document.getElementById('supabase-url');
+        this.supabaseKeyInput = document.getElementById('supabase-key');
+
+        this.bindEvents();
+    }
+
+    bindEvents() {
+        if (!this.settingsBtn) return;
+        this.settingsBtn.addEventListener('click', () => this.openModal());
+        this.closeBtn.addEventListener('click', () => this.closeModal());
+        this.saveBtn.addEventListener('click', () => this.saveSettings());
+    }
+
+    openModal() {
+        // Load current settings from localStorage
+        this.geminiInput.value = localStorage.getItem('gemini_api_key') || '';
+        this.supabaseUrlInput.value = localStorage.getItem('supabase_url') || '';
+        this.supabaseKeyInput.value = localStorage.getItem('supabase_anon_key') || '';
+
+        this.modal.classList.remove('hidden');
+    }
+
+    closeModal() {
+        this.modal.classList.add('hidden');
+    }
+
+    saveSettings() {
+        const gemini = this.geminiInput.value.trim();
+        const supaUrl = this.supabaseUrlInput.value.trim();
+        const supaKey = this.supabaseKeyInput.value.trim();
+
+        if (gemini) localStorage.setItem('gemini_api_key', gemini);
+        else localStorage.removeItem('gemini_api_key');
+
+        if (supaUrl) localStorage.setItem('supabase_url', supaUrl);
+        else localStorage.removeItem('supabase_url');
+
+        if (supaKey) localStorage.setItem('supabase_anon_key', supaKey);
+        else localStorage.removeItem('supabase_anon_key');
+
+        this.saveBtn.textContent = 'Saved!';
+        setTimeout(() => {
+            window.location.reload(); // Reload to initialize new Supabase / AI states
+        }, 500);
+    }
+}
+
+// Initialize Auth & Settings
 document.addEventListener('DOMContentLoaded', () => {
     window.authManager = new AuthManager();
+    window.settingsManager = new SettingsManager();
 });
