@@ -5,22 +5,18 @@
 
 class AIManager {
     constructor() {
-        this.apiKey = localStorage.getItem('gemini_api_key');
-        this.endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+        this.endpoint = '/api/gemini';
     }
 
     isReady() {
-        return !!this.apiKey;
+        // Now running through Vercel serverless function
+        return true;
     }
 
     async generateContent(prompt, context) {
-        if (!this.isReady()) {
-            throw new Error('Gemini API Key is not configured in Settings.');
-        }
-
         const fullPrompt = `${prompt}\n\nContext:\n${context}`;
 
-        const response = await fetch(`${this.endpoint}?key=${this.apiKey}`, {
+        const response = await fetch(this.endpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

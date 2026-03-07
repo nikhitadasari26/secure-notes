@@ -10,13 +10,6 @@ class StorageManager {
         this.storeName = 'notes';
         this.db = null;
         this.initPromise = this.initDB();
-
-        // Initialize Supabase Connection
-        this.supabaseUrl = localStorage.getItem('supabase_url') || '';
-        this.supabaseKey = localStorage.getItem('supabase_anon_key') || '';
-        this.supabase = (window.supabase && this.supabaseUrl && this.supabaseKey)
-            ? window.supabase.createClient(this.supabaseUrl, this.supabaseKey)
-            : null;
     }
 
     generateUUID() {
@@ -54,6 +47,56 @@ class StorageManager {
         });
     }
 
+    async syncFromSupabase() {
+        try {
+            console.log("Starting initial sync from Supabase via Vercel Proxy...");
+            const response = await fetch('/api/supabase', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'sync' })
+            });
+            const { data, error } = await response.json();
+            if (error) {
+                console.error("Supabase sync fetch error:", error);
+                return;
+            }
+            if (data && data.length > 0) {
+                await this.initPromise;
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction([this.storeName], 'readwrite');
+                    const store = transaction.objectStore(this.storeName);
+
+                    data.forEach(remoteNote => {
+                        let parsedContent = '';
+                        try {
+                            parsedContent = typeof remoteNote.content === 'string' ? JSON.parse(remoteNote.content) : remoteNote.content;
+                        } catch (e) {
+                            parsedContent = [{ insert: remoteNote.content || '\n' }];
+                        }
+
+                        const localNote = {
+                            id: remoteNote.id,
+                            title: remoteNote.title || 'Untitled Document',
+                            content: parsedContent,
+                            plainText: typeof remoteNote.content === 'string' ? remoteNote.content.substring(0, 150) : '',
+                            createdAt: remoteNote.created_at ? new Date(remoteNote.created_at).getTime() : Date.now(),
+                            updatedAt: remoteNote.created_at ? new Date(remoteNote.created_at).getTime() : Date.now()
+                        };
+                        store.put(localNote); // Updates existing or inserts new
+                    });
+
+                    transaction.oncomplete = () => {
+                        console.log("Supabase sync to IndexedDB completed.");
+                        resolve();
+                    };
+                    transaction.onerror = (e) => reject(e.target.error);
+                });
+            }
+        } catch (e) {
+            console.error("Supabase initial sync failed:", e);
+        }
+    }
+
     async saveNote(note) {
         await this.initPromise;
         return new Promise((resolve, reject) => {
@@ -67,18 +110,28 @@ class StorageManager {
             const request = store.put(note);
 
             request.onsuccess = () => {
-                // Background Sync to Supabase Permanent Storage (Fire and Forget)
-                if (this.supabase) {
-                    this.supabase.from('simple_notes').upsert({
-                        id: note.id,
-                        title: note.title,
-                        content: JSON.stringify(note.content),
-                    }).then(({ error }) => {
-                        if (error) console.warn("Supabase Sync Failed/Protected by RLS:", error.message);
-                    }).catch(e => {
+                // Background Sync to Supabase Permanent Storage (Fire and Forget) via Proxy
+                fetch('/api/supabase', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'save',
+                        payload: {
+                            id: note.id,
+                            title: note.title,
+                            content: JSON.stringify(note.content),
+                            created_at: new Date(note.createdAt).toISOString()
+                        }
+                    })
+                })
+                    .then(res => res.json())
+                    .then(({ error }) => {
+                        if (error) console.warn("Supabase Sync Failed:", error);
+                    })
+                    .catch(e => {
                         console.warn("Supabase Sync Network Error:", e);
                     });
-                }
+
                 resolve(note);
             };
             request.onerror = (e) => reject(e.target.error);
@@ -121,14 +174,22 @@ class StorageManager {
             const request = store.delete(id);
 
             request.onsuccess = () => {
-                if (this.supabase) {
-                    this.supabase.from('simple_notes').delete().eq('id', id)
-                        .then(({ error }) => {
-                            if (error) console.warn("Supabase Delete Sync Failed:", error.message);
-                        }).catch(e => {
-                            console.warn("Supabase Delete Sync Network Error:", e);
-                        });
-                }
+                fetch('/api/supabase', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'delete',
+                        payload: { id: id }
+                    })
+                })
+                    .then(res => res.json())
+                    .then(({ error }) => {
+                        if (error) console.warn("Supabase Delete Sync Failed:", error);
+                    })
+                    .catch(e => {
+                        console.warn("Supabase Delete Sync Network Error:", e);
+                    });
+
                 resolve(true);
             };
             request.onerror = (e) => reject(e.target.error);

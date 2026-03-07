@@ -22,8 +22,12 @@ class EditorManager {
         this.bindEvents();
 
         // Listen for Auth success to load notes
-        document.addEventListener('authSuccess', () => {
+        document.addEventListener('authSuccess', async () => {
+            if (window.storageManager) {
+                await window.storageManager.syncFromSupabase();
+            }
             this.loadDashboard();
+            this.refreshSidebar();
         });
     }
 
